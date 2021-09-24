@@ -422,6 +422,35 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
             }
         }
 
+        $flattenNestedAttributes = $context[self::FLATTEN_NESTED_ATTRIBUTES] ?? $this->defaultContext[self::FLATTEN_NESTED_ATTRIBUTES];
+        if ($flattenNestedAttributes) {
+            $nestedAttributes = $this->getNestedAttributes($resolvedClass);
+            foreach ($nestedAttributes as $attribute => $property) {
+                $value = $this->extractNestedValue($attribute, $normalizedData);
+                if (null !== $value) {
+                    try {
+                        $attributeContext = $this->getAttributeDenormalizationContext($resolvedClass, $attribute, $context);
+                        $this->setAttributeValue($object, $property, $value, $format, $attributeContext);
+                    } catch (InvalidArgumentException $e) {
+						$exception = NotNormalizableValueException::createForUnexpectedDataType(
+							sprintf('Failed to denormalize attribute "%s" value for class "%s": '.$e->getMessage(), $attribute, $type),
+							$data,
+							['unknown'],
+							$context['deserialization_path'] ?? null,
+							false,
+							$e->getCode(),
+							$e
+						);
+						if (isset($context['not_normalizable_value_exceptions'])) {
+							$context['not_normalizable_value_exceptions'][] = $exception;
+							continue;
+						}
+						throw $exception;
+                    }
+                }
+            }
+       } 
+
         if (!empty($extraAttributes)) {
             throw new ExtraAttributesException($extraAttributes);
         }
@@ -718,4 +747,39 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
             return false;
         }
     }
+
+    private function getNestedAttributes(string $class = null) {
+        if (!$this->classMetadataFactory) {
+            throw new LogicException(sprintf('A class metadata factory must be provided in the constructor when setting "%s" to true.', self::FLATTEN_NESTED_ATTRIBUTES));
+        }
+
+        if (null === $class || !$this->classMetadataFactory->hasMetadataFor($class)) {
+            return [];
+        }
+
+        $properties = [];
+        $classMetadata = $this->classMetadataFactory->getMetadataFor($class);
+        foreach ($classMetadata->getAttributesMetadata() as $name => $metadata) {
+            $serializedName = $metadata->getSerializedName();
+            if (null === $serializedName || false === strpos($serializedName, self::FLATTENER)) {
+                continue;
+            }
+            $properties[$serializedName] = $name;
+        }
+
+        return $properties;
+    }
+
+    private function extractNestedValue($path, $data)
+    {
+        $elements = explode(self::FLATTENER, $path);
+        foreach ($elements as $element) {
+            if (isset($data[$element])) {
+                $data = $data[$element];
+            } else {
+                return null;
+            }
+        }
+        return $data;
+    }	
 }
