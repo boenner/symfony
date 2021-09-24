@@ -117,11 +117,15 @@ abstract class AbstractNormalizer implements NormalizerInterface, DenormalizerIn
      */
     protected const CIRCULAR_REFERENCE_LIMIT_COUNTERS = 'circular_reference_limit_counters';
 
+    public const FLATTEN_NESTED_ATTRIBUTES = 'flatten_nested_attributes';
+    public const FLATTENER = '.';
+
     protected $defaultContext = [
         self::ALLOW_EXTRA_ATTRIBUTES => true,
         self::CIRCULAR_REFERENCE_HANDLER => null,
         self::CIRCULAR_REFERENCE_LIMIT => 1,
         self::IGNORED_ATTRIBUTES => [],
+		self::FLATTEN_NESTED_ATTRIBUTES => false,
     ];
 
     /**
