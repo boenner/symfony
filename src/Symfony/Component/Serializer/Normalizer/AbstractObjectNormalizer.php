@@ -102,6 +102,16 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
      */
     public const PRESERVE_EMPTY_OBJECTS = 'preserve_empty_objects';
 
+	/**
+	 * Flag to enable accessing nested atttibutes with the SerializedName annotation.
+	 */
+    public const FLATTEN_NESTED_ATTRIBUTES = 'flatten_nested_attributes';
+
+	/**
+	 * Spacer used to separate attributes.
+	 */
+    protected const FLATTENER = '.';
+
     private $propertyTypeExtractor;
     private $typesCache = [];
     private $attributesCache = [];
@@ -367,12 +377,22 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
         $object = $this->instantiateObject($normalizedData, $type, $context, $reflectionClass, $allowedAttributes, $format);
         $resolvedClass = $this->objectClassResolver ? ($this->objectClassResolver)($object) : \get_class($object);
 
+
+        $flattenNestedAttributes = $context[self::FLATTEN_NESTED_ATTRIBUTES] ?? $this->defaultContext[self::FLATTEN_NESTED_ATTRIBUTES] ?? false;
+		if ($flattenNestedAttributes) {
+            $nestedAttributes = $this->getNestedAttributes($resolvedClass);
+		}
+
         foreach ($normalizedData as $attribute => $value) {
             $attributeContext = $this->getAttributeDenormalizationContext($resolvedClass, $attribute, $context);
 
             if ($this->nameConverter) {
                 $attribute = $this->nameConverter->denormalize($attribute, $resolvedClass, $format, $attributeContext);
             }
+
+			if ($flattenNestedAttributes && \in_array(\strtolower($attribute), $nestedAttributes)) {
+				continue;
+			}
 
             if ((false !== $allowedAttributes && !\in_array($attribute, $allowedAttributes)) || !$this->isAllowedAttribute($resolvedClass, $attribute, $format, $context)) {
                 if (!($context[self::ALLOW_EXTRA_ATTRIBUTES] ?? $this->defaultContext[self::ALLOW_EXTRA_ATTRIBUTES])) {
@@ -422,16 +442,26 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
             }
         }
 
-        $flattenNestedAttributes = $context[self::FLATTEN_NESTED_ATTRIBUTES] ?? $this->defaultContext[self::FLATTEN_NESTED_ATTRIBUTES];
         if ($flattenNestedAttributes) {
-            $nestedAttributes = $this->getNestedAttributes($resolvedClass);
             foreach ($nestedAttributes as $attribute => $property) {
                 $value = $this->extractNestedValue($attribute, $normalizedData);
+				$attributeContext = $this->getAttributeDenormalizationContext($resolvedClass, $attribute, $context);
                 if (null !== $value) {
-                    try {
-                        $attributeContext = $this->getAttributeDenormalizationContext($resolvedClass, $attribute, $context);
-                        $this->setAttributeValue($object, $property, $value, $format, $attributeContext);
-                    } catch (InvalidArgumentException $e) {
+					$types = $this->getTypes($resolvedClass, $property);
+					if (null !== $types) {
+						try {
+							$value = $this->validateAndDenormalize($types, $resolvedClass, $attribute, $value, $format, $attributeContext);
+						} catch (NotNormalizableValueException $exception) {
+							if (isset($context['not_normalizable_value_exceptions'])) {
+								$context['not_normalizable_value_exceptions'][] = $exception;
+								continue;
+							}
+							throw $exception;
+						}
+					}
+					try {
+						$this->setAttributeValue($object, $property, $value, $format, $attributeContext);
+                    } catch (NotNormalizableValueException | InvalidArgumentException $e) {
 						$exception = NotNormalizableValueException::createForUnexpectedDataType(
 							sprintf('Failed to denormalize attribute "%s" value for class "%s": '.$e->getMessage(), $attribute, $type),
 							$data,
@@ -770,7 +800,10 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
             if (null === $serializedName || false === strpos($serializedName, self::FLATTENER)) {
                 continue;
             }
-            $properties[$serializedName] = $name;
+			if (isset($properties[$serializedName])) {
+				throw new LogicException(sprintf('Duplicate serialized name: %s', $serializedName));
+			}
+            $properties[$serializedName] = \strtolower($name);
         }
 
         return $properties;
