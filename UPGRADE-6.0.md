@@ -89,6 +89,7 @@ Form
 FrameworkBundle
 ---------------
 
+ * Remove the `framework.translator.enabled_locales` config option, use `framework.enabled_locales` instead
  * Remove the `session.storage` alias and `session.storage.*` services, use the `session.storage.factory` alias and `session.storage.factory.*` services instead
  * Remove `framework.session.storage_id` configuration option, use the `framework.session.storage_factory_id` configuration option instead
  * Remove the `session` service and the `SessionInterface` alias, use the `\Symfony\Component\HttpFoundation\Request::getSession()` or the new `\Symfony\Component\HttpFoundation\RequestStack::getSession()` methods instead
@@ -169,6 +170,7 @@ Monolog
 
  * The `$actionLevel` constructor argument of `Symfony\Bridge\Monolog\Handler\FingersCrossed\NotFoundActivationStrategy` has been replaced by the `$inner` one which expects an ActivationStrategyInterface to decorate instead. `Symfony\Bridge\Monolog\Handler\FingersCrossed\NotFoundActivationStrategy` is now final.
  * The `$actionLevel` constructor argument of `Symfony\Bridge\Monolog\Handler\FingersCrossed\HttpCodeActivationStrategy` has been replaced by the `$inner` one which expects an ActivationStrategyInterface to decorate instead. `Symfony\Bridge\Monolog\Handler\FingersCrossed\HttpCodeActivationStrategy` is now final.
+ * Remove `ResetLoggersWorkerSubscriber` in favor of "reset_on_message" option in messenger configuration
 
 Notifier
 --------
@@ -393,6 +395,7 @@ Security
 SecurityBundle
 --------------
 
+ * Remove `FirewallConfig::getListeners()`, use `FirewallConfig::getAuthenticators()` instead
  * Remove `security.authentication.basic_entry_point` and `security.authentication.retry_entry_point` services,
    the logic is moved into the `HttpBasicAuthenticator` and `ChannelListener` respectively
  * Remove `SecurityFactoryInterface` and `SecurityExtension::addSecurityListenerFactory()` in favor of
