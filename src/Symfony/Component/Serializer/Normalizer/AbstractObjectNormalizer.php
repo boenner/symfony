@@ -189,6 +189,7 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
             $maxDepthHandler = null;
         }
 
+
         foreach ($attributes as $attribute) {
             $maxDepthReached = false;
             if (null !== $attributesMetadata && ($maxDepthReached = $this->isMaxDepthReached($attributesMetadata, $class, $attribute, $context)) && !$maxDepthHandler) {
@@ -220,6 +221,7 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
 
             if (null !== $attributeValue && !is_scalar($attributeValue)) {
                 $stack[$attribute] = $attributeValue;
+				continue;
             }
 
             $data = $this->updateData($data, $attribute, $attributeValue, $class, $format, $attributeContext);
@@ -701,9 +703,15 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
 
         if ($this->nameConverter) {
             $attribute = $this->nameConverter->normalize($attribute, $class, $format, $context);
-        }
+		}
 
-        $data[$attribute] = $attributeValue;
+        $flattenNestedAttributes = $context[self::FLATTEN_NESTED_ATTRIBUTES] ?? $this->defaultContext[self::FLATTEN_NESTED_ATTRIBUTES] ?? false;
+		if ($flattenNestedAttributes && false !== strpos($attribute, self::FLATTENER)) {
+			$elements = explode(self::FLATTENER, $attribute);
+			$data = $this->setNestedValue($data, $elements, $attributeValue);
+		} else {
+			$data[$attribute] = $attributeValue;
+		}
 
         return $data;
     }
@@ -821,4 +829,20 @@ abstract class AbstractObjectNormalizer extends AbstractNormalizer
         }
         return $data;
     }	
+
+	private function setNestedValue($data, $elements, $value) {
+		$element = array_shift($elements);
+		if (isset($data[$element]) && !\is_array($data[$element])) {
+			throw new LogicException(sprintf('The element you are trying to set is already populated: %s', $element));
+		}	 
+		if (count($elements) === 0) {
+			$data[$element] = $value;
+		} else {
+			if (!isset($data[$element])) {
+				$data[$element] = [];
+			}
+			$data[$element] = $this->setNestedValue($data[$element], $elements, $value);
+		}
+		return $data;
+	}
 }
